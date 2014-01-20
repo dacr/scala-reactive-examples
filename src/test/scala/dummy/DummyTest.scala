@@ -21,12 +21,56 @@ import org.scalatest.FunSuite
 import org.scalatest.ShouldMatchers
 import org.scalatest.junit.JUnitRunner
 
+import fr.janalyse.ssh._
+
+import rx.lang.scala._
+import rx.lang.scala.subjects._
+
 @RunWith(classOf[JUnitRunner])
 class DummyTest extends FunSuite with ShouldMatchers {
-  
+
   test("Simple test") {
     Dummy.message should startWith("Hello")
     info("Test done")
   }
+
+  def rxFromSSH(cmd:String, opts:SSHOptions):Observable[String] = {
+    val ssh = SSH(opts)
+    
+    val subject = Subject[String]()
+    def resultOnNext(result: ExecResult) {
+      result match {
+        case e: ExecPart => subject.onNext(e.content)
+        case e: ExecEnd => subject.onCompleted ; ssh.close
+        case ExecTimeout => subject.onError(new Exception("Timeout"))
+      }
+    }
+    ssh.run(cmd, resultOnNext)
+    subject
+  }
   
+  test("ssh to observables") {
+    val timeRE = """.*(\d\d:\d\d:\d\d).*""".r
+    val opts  = SSHOptions("localhost", username="test")
+    
+    // Create observables...
+    val date  = rxFromSSH("while [ 1 ] ; do date ; sleep 1 ; done", opts)
+    val time  = date.map{case timeRE(time)=>time}
+    val secs  = time.map(_.split(":")(2).toInt)
+    
+    // And now let's subscribe...
+    date.subscribe(s => println("date="+s))
+    time.subscribe(s => println("time="+s))
+    secs.subscribe(s => println("secs="+s))
+    
+    println("******* MidStep & wait 5s *******")
+    Thread.sleep(5*1000L)
+    
+    val pairsSecs = secs.filter(_ % 2 == 0).map(_*2)
+    pairsSecs.subscribe(s => println("PROCESSED="+s))
+    
+    
+    println("******* End reached & wait 10s *******")    
+    Thread.sleep(10*1000L)
+  }
 }
