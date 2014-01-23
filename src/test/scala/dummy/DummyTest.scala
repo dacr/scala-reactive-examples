@@ -18,7 +18,8 @@ package dummy
 
 import org.junit.runner.RunWith
 import org.scalatest.FunSuite
-import org.scalatest.ShouldMatchers
+//import org.scalatest.ShouldMatchers
+import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.junit.JUnitRunner
 
 import fr.janalyse.ssh._
