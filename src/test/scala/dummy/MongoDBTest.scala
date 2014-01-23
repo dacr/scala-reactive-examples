@@ -35,11 +35,11 @@ import org.scalatest.BeforeAndAfterEach
 class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfterEach {
 
   var driver: MongoDriver = _
-  var connection: MongoConnection = _
+  var use: MongoConnection = _
 
   override def beforeEach() {
     driver = new MongoDriver
-    connection = driver.connection(
+    use = driver.connection(
       List(
         "localhost:27017",
         "localhost:27018",
@@ -53,7 +53,7 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfterEach {
 
   // --------------------------------------------------------------------------------
   ignore("perf test") {
-    val db = connection("orange")
+    val db = use("orange")
     val collection = db("people")
 
     val fops = for { _ <- 1 to 30 } yield {
@@ -75,7 +75,7 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfterEach {
 
   // --------------------------------------------------------------------------------
   test("Simple test") {
-    val db = connection("orange")
+    val db = use("orange")
     val collection = db("people")
 
     // ----------------- REMOVE -----------------
@@ -130,7 +130,7 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfterEach {
 
   // --------------------------------------------------------------------------------
   ignore("query statistics") {
-    val adb = connection("admin")
+    val adb = use("admin")
     val fop = adb.command(Status)
     for {
       status <- fop
@@ -147,7 +147,7 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfterEach {
 
   // --------------------------------------------------------------------------------
   test("Second test") {
-    val db = connection("training")
+    val db = use("training")
     val collection = db("scores")
 
     val query =
