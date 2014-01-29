@@ -28,7 +28,7 @@ import rx.lang.scala._
 import rx.lang.scala.subjects._
 
 @RunWith(classOf[JUnitRunner])
-class DummyTest extends FunSuite with ShouldMatchers {
+class SSHObservablesTest extends FunSuite with ShouldMatchers {
 
   test("Simple test") {
     Dummy.message should startWith("Hello")
