@@ -82,6 +82,34 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
     checkUpTo(2, v / 2 + 1)
   }
 
+  
+  case class CheckedValue(
+      value:Long,
+      isPrime:Boolean,
+      digitCount:Long,
+      primePosition:Long
+      )
+  implicit object SomeClassHandler extends BSONDocumentReader[CheckedValue] with BSONDocumentWriter[CheckedValue] {
+    def read(doc: BSONDocument) = {
+      CheckedValue(
+          value = doc.getAs[Long]("value").get,
+          isPrime = doc.getAs[Boolean]("isPrime").get,
+          digitCount = doc.getAs[Long]("digitCount").get,
+          primePosition = doc.getAs[Long]("primePosition").get
+          )
+    }
+    def write(cv: CheckedValue) = {
+      BSONDocument(
+          "value" -> cv.value,
+          "isPrime" -> cv.isPrime,
+          "digitCount" -> cv.digitCount,
+          "primePosition" -> cv.primePosition
+          )
+    }
+}
+      
+      
+  
   def populateBigDataIfRequired() {
     import math._
     val db = use("bigs")
@@ -139,6 +167,22 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
     driver.close
   }
 
+  // --------------------------------------------------------------------------------
+  test("primes") {
+    val bigs=use("bigs")
+    val checked=bigs("primes")
+    val cursor = checked.find(BD()).cursor[CheckedValue]
+    
+    val fall = 
+      cursor
+        .collect[List]()
+        .map(_.filter(_.isPrime))
+        .map(_.size)
+    
+     val sz = Await.result(fall, 30.seconds)
+     info(s"got $sz primes, but not in an optimized way, as everything all primes are loaded into memory")
+     sz should be >(0)
+  }
   // --------------------------------------------------------------------------------
   test("perf test") {
     val db = use("world")
