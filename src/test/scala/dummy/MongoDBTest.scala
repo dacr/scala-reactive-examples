@@ -34,6 +34,7 @@ import org.scalatest.BeforeAndAfter
 import org.scalatest.BeforeAndAfterAll
 import scala.annotation.tailrec
 import fr.janalyse.primes.PrimesGenerator
+import fr.janalyse.primes.CheckedValue
 
 @RunWith(classOf[JUnitRunner])
 class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
@@ -72,79 +73,77 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
     Await.ready(Future.sequence(finserts), 2.seconds)
   }
 
-  
-  case class CheckedValue(
-      value:Long,
-      isPrime:Boolean,
-      digitCount:Long,
-      primePosition:Long
-      )
-  implicit object SomeClassHandler extends BSONDocumentReader[CheckedValue] with BSONDocumentWriter[CheckedValue] {
+  implicit object CheckedValueHandler
+    extends BSONDocumentReader[CheckedValue[Long]]
+    with BSONDocumentWriter[CheckedValue[Long]] {
+
     def read(doc: BSONDocument) = {
       CheckedValue(
-          value = doc.getAs[Long]("value").get,
-          isPrime = doc.getAs[Boolean]("isPrime").get,
-          digitCount = doc.getAs[Long]("digitCount").get,
-          primePosition = doc.getAs[Long]("primePosition").get
-          )
+        value = doc.getAs[Long]("value").get,
+        isPrime = doc.getAs[Boolean]("isPrime").get,
+        digitCount = doc.getAs[Long]("digitCount").get,
+        nth = doc.getAs[Long]("nth").get)
     }
-    def write(cv: CheckedValue) = {
+    def write(cv: CheckedValue[Long]) = {
       BSONDocument(
-          "value" -> cv.value,
-          "isPrime" -> cv.isPrime,
-          "digitCount" -> cv.digitCount,
-          "primePosition" -> cv.primePosition
-          )
+        "value" -> cv.value,
+        "isPrime" -> cv.isPrime,
+        "digitCount" -> cv.digitCount,
+        "nth" -> cv.nth)
     }
-}
-      
-      
-  
-  def populateBigDataIfRequired() {
+  }
+
+  def populatePrimesIfRequired(howmany:Int=10000) {
     import math._
-    val pgen = new PrimesGenerator[Long]
-    import pgen._
-    val db = use("bigs")
-    val primes = db("primes")
-    var primeCount=0L
-    
-    def insert(value: Long) {
-      val prime = isPrime(value)
-      if (prime) primeCount+=1L
-      val fins = primes.insert(
-        BD(
-          "value" -> value,
-          "isPrime" -> prime,
-          "digitCount" -> (log(value)/log(10L)+1).toLong,
-          "primePosition" -> (if(prime) primeCount else -1L)
-          ))
-      Await.ready(fins, 1.second)
+    val db = use("primes")
+    val primes = db("values")
+    val lastPrime = db("lastPrime")
+    val lastNotPrime = db("lastNotPrime")
+
+    def insert(checked: CheckedValue[Long]) {
+      val impacted = if (checked.isPrime) lastPrime else lastNotPrime
+      val f1 = primes.insert(checked)
+      val f2 = for {
+        _ <- impacted.remove(BD())
+        _ <- impacted.insert(checked)
+      } yield 'done
+
+      Await.ready(Future.sequence(List(f1, f2)), 5.second)
     }
-    info("Required index : db.primes.createIndex({value:1})")
-    info("Required index : db.primes.createIndex({primePosition:1})")
+
+    info("Required index : db.values.createIndex({value:1})")
+    info("Required index : db.values.createIndex({isPrime:1, nth:1})")
+
     val fall = for {
-      lastValueDoc <- primes.find(BD()).sort(BD("value"-> -1)).cursor[BD].headOption.map(_.getOrElse(BD()))
-      lastPrimeDoc <- primes.find(BD()).sort(BD("primePosition"-> -1)).cursor[BD].headOption.map(_.getOrElse(BD()))
+      foundLastPrime <- lastPrime.find(BD()).cursor[CheckedValue[Long]].headOption
+      foundLastNotPrime <- lastNotPrime.find(BD()).cursor[CheckedValue[Long]].headOption
     } yield {
-      val lastValue = lastValueDoc.get("value") match {
-        case Some(BSONLong(l))=> l
-        case _ => 0L
+      val pgen = new PrimesGenerator[Long]
+      
+      val foundLast = for {
+        flp <- foundLastPrime
+        flnp <- foundLastNotPrime
+      } yield if (flp.value > flnp.value) flp else flnp
+          
+      val primeNth = foundLastPrime.map(_.nth).getOrElse(1L)
+      val notPrimeNth = foundLastNotPrime.map(_.nth).getOrElse(0L)
+      val resuming = foundLast.isDefined
+      
+      val resumedStream = pgen.checkedValues(foundLast.getOrElse(CheckedValue.first), primeNth, notPrimeNth) match {
+        case s if resuming => s.tail
+        case s => s
       }
-      val lastPrimePosition = lastPrimeDoc.get("primePosition") match {
-        case Some(BSONLong(l))=> l
-        case _ => 0L
-      }
-      primeCount = lastPrimePosition
-      val howmany=500000L
-      info(s"Generating new primes, starting from $lastValue, checking $howmany next values (lastPrimePosition=$lastPrimePosition")
-      (1L+lastValue to 1L+lastValue+howmany).foreach{v => insert(v)}
+      
+      info(s"Generating new primes, starting from ${resumedStream.head}, checking $howmany next values ")
+      for { checkedValue <- resumedStream.take(howmany) } { insert(checkedValue) }
       'done
     }
-    fall.onFailure{case x =>
-      info(x.toString)
-      fail("NOK - try create an index on value field of primes collection")
+    fall.onFailure {
+      case x =>
+        info(x.toString)
+        fail("NOK - try create an index on value field of primes collection")
     }
-    Await.ready(fall, 20.minutes)
+    Await.ready(fall, 30.minutes)
     info("populated")
   }
 
@@ -152,7 +151,7 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
     driver = new MongoDriver()
     use = driver.connection(List("localhost:27017"))
     populateIfRequired()
-    //populateBigDataIfRequired()
+    populatePrimesIfRequired()
   }
 
   after {
@@ -161,19 +160,19 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
 
   // --------------------------------------------------------------------------------
   test("primes") {
-    val bigs=use("bigs")
-    val checked=bigs("primes")
-    val cursor = checked.find(BD()).cursor[CheckedValue]
-    
-    val fall = 
+    val db = use("primes")
+    val checked = db("values")
+    val cursor = checked.find(BD()).cursor[CheckedValue[Long]]
+
+    val fall =
       cursor
         .collect[List]()
         .map(_.filter(_.isPrime))
         .map(_.size)
-    
-     val sz = Await.result(fall, 30.seconds)
-     info(s"got $sz primes, but not in an optimized way, as everything all primes are loaded into memory")
-     sz should be >(0)
+
+    val sz = Await.result(fall, 30.seconds)
+    info(s"got $sz primes, but not in an optimized way, as everything all primes are loaded into memory")
+    sz should be > (0)
   }
   // --------------------------------------------------------------------------------
   test("perf test") {

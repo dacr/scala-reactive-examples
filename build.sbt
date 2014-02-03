@@ -18,7 +18,7 @@ libraryDependencies ++= Seq(
    "com.netflix.rxjava" % "rxjava-scala" % "0.16.+",
    "org.reactivemongo" %% "reactivemongo" % "0.10.0",
    "fr.janalyse" %% "janalyse-ssh" % "0.9.12",
-   "fr.janalyse" %% "primes" % "1.0.2"
+   "fr.janalyse" %% "primes" % "1.0.4"
 )
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.+" % "test"
