@@ -33,6 +33,7 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.BeforeAndAfter
 import org.scalatest.BeforeAndAfterAll
 import scala.annotation.tailrec
+import fr.janalyse.primes.PrimesGenerator
 
 @RunWith(classOf[JUnitRunner])
 class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
@@ -71,17 +72,6 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
     Await.ready(Future.sequence(finserts), 2.seconds)
   }
 
-  def isPrime(v: BigInt): Boolean = {
-    @tailrec
-    def checkUpTo(curr: BigInt, upTo: BigInt): Boolean =
-      if (curr >= upTo) true
-      else (v /% curr) match {
-        case (_, mod) if mod == 0 => false
-        case (nextUpTo, _) => checkUpTo(curr + 1, nextUpTo + 1)
-      }
-    checkUpTo(2, v / 2 + 1)
-  }
-
   
   case class CheckedValue(
       value:Long,
@@ -112,6 +102,8 @@ class MongoDBTest extends FunSuite with ShouldMatchers with BeforeAndAfter {
   
   def populateBigDataIfRequired() {
     import math._
+    val pgen = new PrimesGenerator[Long]
+    import pgen._
     val db = use("bigs")
     val primes = db("primes")
     var primeCount=0L
