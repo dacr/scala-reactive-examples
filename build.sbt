@@ -15,6 +15,8 @@ mainClass in assembly := Some("dummy.Dummy")
 jarName in assembly := "reactive.jar"
 
 libraryDependencies ++= Seq(
+   "com.github.scala-incubator.io" %% "scala-io-core"      % "0.4.2",
+   "com.github.scala-incubator.io" %% "scala-io-file"      % "0.4.2",
    "net.databinder.dispatch" %% "dispatch-core" % "0.11.+",
    "com.netflix.rxjava" % "rxjava-scala" % "0.16.+",
    "org.reactivemongo" %% "reactivemongo" % "0.10.0",
