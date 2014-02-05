@@ -39,10 +39,11 @@ initialCommands in console := """
   import rx.lang.scala.schedulers._
   import reactivemongo.api._
   import dispatch._
-  //import Defaults._
   import scala.concurrent.ExecutionContext.Implicits.global
   import scala.concurrent._
   import scala.concurrent.duration._
+  import scalax.file.Path
+  import scalax.io._
 """
 
 sourceGenerators in Compile <+= 
