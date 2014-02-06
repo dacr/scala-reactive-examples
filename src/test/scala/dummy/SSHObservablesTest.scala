@@ -37,7 +37,6 @@ class SSHObservablesTest extends FunSuite with ShouldMatchers {
 
   def rxFromSSH(cmd:String, opts:SSHOptions):Observable[String] = {
     val ssh = SSH(opts)
-    
     val subject = Subject[String]()
     def resultOnNext(result: ExecResult) {
       result match {
@@ -49,6 +48,29 @@ class SSHObservablesTest extends FunSuite with ShouldMatchers {
     ssh.run(cmd, resultOnNext)
     subject
   }
+  
+  test("vmstat observable") {
+    val stringStream = rxFromSSH("vmstat 1 600", SSHOptions("localhost", "test"))
+    
+    val cellsStream =
+      stringStream
+        .filter(! _.contains("--"))
+        .filter(! _.contains("us"))
+        .map(_.trim)
+        .filter(_.size > 0)
+        .map(_.split("\\s+"))
+    
+    val idleStream = cellsStream.map(cells => cells(14).toInt)
+    val cpuStream = idleStream.map(idle => 100-idle)
+    val cpuWarnStream  = cpuStream.filter(us =>  us >= 50 & us <80)
+    val cpuTooHighStream = cpuStream.filter(us =>  us >= 80)
+    
+    cpuWarnStream.subscribe(cpu => println(s"warning CPU ${cpu}%"))
+    cpuTooHighStream.subscribe(cpu => println(s"error CPU reach=${cpu}%"))
+
+  }
+  
+  
   
   test("ssh to observables") {
     val timeRE = """.*(\d\d:\d\d:\d\d).*""".r

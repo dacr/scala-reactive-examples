@@ -35,15 +35,24 @@ resolvers += "Typesafe repository releases" at "http://repo.typesafe.com/typesaf
 initialCommands in console := """
   import dummy._
   import fr.janalyse.ssh._
+  import fr.janalyse.primes._
   import rx.lang.scala._
   import rx.lang.scala.schedulers._
+  import rx.lang.scala.subjects._
   import reactivemongo.api._
-  import dispatch._
   import scala.concurrent.ExecutionContext.Implicits.global
   import scala.concurrent._
   import scala.concurrent.duration._
+  import akka.actor._
+  import akka.actor.ActorDSL._
+  import akka.actor.ActorSystem
   import scalax.file.Path
   import scalax.io._
+  def now=System.currentTimeMillis
+  def howlong[T](proc : => T) = {val s=now ; (proc, s"${now-s}ms")}
+  def futurehowlong[T](proc : => Future[T]) = {howlong(Await.result(proc, 60.seconds))}
+  val pgen=new PrimesGenerator[BigInt]
+  import dispatch._
 """
 
 sourceGenerators in Compile <+= 
